@@ -1,0 +1,127 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI People Bingo</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap">
+<style>
+/* Layout: one phone-first card, a 3x3 grid of conversation prompts, each with a name field; the centre square is the joke. */
+:root {
+  --bg: #f3f4f6; --surface: #ffffff; --ink: #17181c; --muted: #5d6270;
+  --line: #d9dce3; --accent: #d97a06; --accent-soft: #fff1dc; --done: #e9f6ee; --done-ink: #1f7a45;
+  --display: "Space Grotesk", "Segoe UI", system-ui, sans-serif;
+  --body: "Inter", "Segoe UI", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #14161b; --surface: #1d2027; --ink: #f1f2f5; --muted: #a3a8b5;
+  --line: #333845; --accent: #ff9a1f; --accent-soft: #3a2a14; --done: #173324; --done-ink: #7fd9a3; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #14161b; --surface: #1d2027; --ink: #f1f2f5; --muted: #a3a8b5;
+  --line: #333845; --accent: #ff9a1f; --accent-soft: #3a2a14; --done: #173324; --done-ink: #7fd9a3; color-scheme: dark }
+body { background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 15px; line-height: 1.45;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 20px 32px; }
+main { max-width: 560px; margin: 0 auto; display: grid; gap: 16px; }
+.eyebrow { font: 600 12px/1 var(--body); letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+h1 { font: 700 30px/1.1 var(--display); margin: 6px 0 0; text-wrap: balance; }
+.rules { color: var(--muted); margin: 0; }
+.status { display: flex; justify-content: space-between; align-items: center; gap: 12px; font-variant-numeric: tabular-nums; }
+.count { font: 600 15px var(--body); }
+.bar { flex: 1; height: 8px; background: var(--line); border-radius: 99px; overflow: hidden; }
+.bar span { display: block; height: 100%; width: 0; background: var(--accent); transition: width .3s; }
+.grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.cell { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 10px 9px; display: grid; gap: 8px; align-content: space-between; min-width: 0; min-height: 132px; }
+.cell p { margin: 0; font-size: 13px; line-height: 1.3; font-weight: 500; overflow-wrap: anywhere; }
+.cell.centre { background: var(--accent-soft); border-color: var(--accent); }
+.cell.centre p { font-family: var(--display); font-weight: 700; font-size: 14px; }
+.cell.filled { background: var(--done); border-color: var(--done-ink); }
+.cell.filled p { color: var(--done-ink); }
+.cell.win { outline: 2px solid var(--accent); outline-offset: 1px; }
+.cell input { width: 100%; min-width: 0; box-sizing: border-box; font: 500 14px var(--body); color: var(--ink); background: var(--bg);
+  border: 1px solid var(--line); border-radius: 8px; padding: 7px 8px; }
+.cell input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.banner { border-radius: 12px; padding: 12px 14px; background: var(--accent-soft); border: 1px solid var(--accent); font-weight: 600; }
+.foot { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; color: var(--muted); font-size: 13px; }
+button { font: 600 13px var(--body); color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; cursor: pointer; }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.confirm { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+@media (max-width: 380px) { .cell { min-height: 140px; } .cell p { font-size: 12px; } }
+@media (prefers-reduced-motion: reduce) { .bar span { transition: none; } }
+</style>
+
+</head><body>
+<main>
+  <header>
+    <div class="eyebrow">RO AI meetup · Bucharest</div>
+    <h1>AI People Bingo</h1>
+  </header>
+  <p class="rules">Find a different person for each square. Ask them, talk for a minute, then write their first name. A full row, column or diagonal is a bingo. Fill all nine and show your card to Corina or Radu at the end.</p>
+  <div class="status"><span class="count" id="count">0 / 9</span><div class="bar" aria-hidden="true"><span id="bar"></span></div></div>
+  <div class="banner" id="banner" hidden></div>
+  <section class="grid" id="grid" aria-label="Bingo card"></section>
+  <div class="foot">
+    <span>Names stay on your phone only.</span>
+    <div class="confirm" id="clearBox">
+      <button type="button" id="clear">Start over</button>
+    </div>
+  </div>
+</main>
+
+<script>
+const PROMPTS = [
+  "Has built an agentic system",
+  "Works where AI is still banned",
+  "Has made two AI models debate each other",
+  "Is not a developer",
+  "Told me a good joke about AI",
+  "Has an AI agent that works while they sleep",
+  "Is at a RO AI meetup for the first time",
+  "Has a rule for what they never let AI do",
+  "Changed how they lead or work because of AI"
+];
+const LINES = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+const KEY = "roai-bingo-2026";
+let names = Array(9).fill("");
+try { const s = JSON.parse(localStorage.getItem(KEY) || "null"); if (Array.isArray(s) && s.length === 9) names = s.map(v => String(v || "")); } catch (e) {}
+
+const grid = document.getElementById("grid");
+PROMPTS.forEach((text, i) => {
+  const cell = document.createElement("div");
+  cell.className = "cell" + (i === 4 ? " centre" : "");
+  const p = document.createElement("p"); p.textContent = text;
+  const input = document.createElement("input");
+  input.id = "name-" + i; input.type = "text"; input.placeholder = "Name";
+  input.autocomplete = "off"; input.maxLength = 40; input.value = names[i];
+  input.setAttribute("aria-label", "Name of the person who " + text.toLowerCase());
+  input.addEventListener("input", () => { names[i] = input.value.trim(); save(); render(); });
+  cell.append(p, input); grid.append(cell);
+});
+
+function save() { try { localStorage.setItem(KEY, JSON.stringify(names)); } catch (e) {} }
+
+function render() {
+  const cells = grid.children, filled = names.map(n => n.length > 0);
+  const n = filled.filter(Boolean).length;
+  document.getElementById("count").textContent = n + " / 9";
+  document.getElementById("bar").style.width = (n / 9 * 100) + "%";
+  const wins = LINES.filter(l => l.every(i => filled[i]));
+  const winSet = new Set(wins.flat());
+  [...cells].forEach((c, i) => { c.classList.toggle("filled", filled[i]); c.classList.toggle("win", winSet.has(i)); });
+  const b = document.getElementById("banner");
+  if (n === 9) { b.textContent = "Full card. Show it to Corina or Radu at the end."; b.hidden = false; }
+  else if (wins.length) { b.textContent = "Bingo! You have a line. Keep going for the full card."; b.hidden = false; }
+  else { b.hidden = true; }
+}
+
+const box = document.getElementById("clearBox");
+function askClear() {
+  box.innerHTML = "";
+  const q = document.createElement("span"); q.textContent = "Clear all names?";
+  const yes = document.createElement("button"); yes.type = "button"; yes.textContent = "Clear";
+  const no = document.createElement("button"); no.type = "button"; no.textContent = "Keep";
+  yes.onclick = () => { names = Array(9).fill(""); save(); [...grid.querySelectorAll("input")].forEach(x => x.value = ""); render(); reset(); };
+  no.onclick = reset; box.append(q, yes, no);
+}
+function reset() { box.innerHTML = ""; const b = document.createElement("button"); b.type = "button"; b.id = "clear"; b.textContent = "Start over"; b.onclick = askClear; box.append(b); }
+document.getElementById("clear").onclick = askClear;
+render();
+</script>
+</body></html>
