@@ -58,13 +58,13 @@ input:focus-visible, textarea:focus-visible, button:focus-visible { outline: 2px
     <div class="eyebrow">RO AI meetup · Bucharest · 12.11.2026</div>
     <h1>AI People Bingo</h1>
   </header>
-  <p class="rules">Find a different person for each square. Ask them, talk for a minute, then write their <b>first and last name</b>. A full row, column or diagonal is a bingo. Then tap <b>Save my card</b> and show it as proof.</p>
+  <p class="rules">Find a different person for each square. Ask them, talk for a minute, then write their <b>first and last name</b>. Bingo means <b>all nine squares</b>: nine people, nine conversations. Then tap <b>Save my card</b> and show it as proof.</p>
   <label class="me">Your name <input id="me" type="text" maxlength="40" autocomplete="name" placeholder="First and last name"></label>
   <div class="status"><span class="count" id="count">0 / 9</span><div class="bar" aria-hidden="true"><span id="bar"></span></div></div>
   <div class="banner" id="banner" hidden></div>
   <section class="grid" id="grid" aria-label="Bingo card"></section>
   <button type="button" id="save" class="save" disabled>Save my card</button>
-  <p class="note" id="note">Write your name and complete one line to save your card.</p>
+  <p class="note" id="note">Write your name and fill all nine squares to save your card.</p>
   <div class="preview" id="preview" hidden></div>
   <div class="foot">
     <span>Everything stays on your phone.</span>
@@ -118,12 +118,12 @@ function render() {
   const winSet = new Set(wins.flat());
   [...grid.children].forEach((c, i) => { c.classList.toggle("filled", filled[i]); c.classList.toggle("win", winSet.has(i)); });
   const b = document.getElementById("banner");
-  if (full) { b.textContent = "Full card! Save it and show it to Corina or Radu."; b.hidden = false; }
-  else if (wins.length) { b.textContent = "Bingo! You have a line. Save your card, or keep going for the full card."; b.hidden = false; }
+  if (full) { b.textContent = "BINGO! Save your card and show it to Corina or Radu."; b.hidden = false; }
+  else if (n >= 6) { b.textContent = (9 - n) + " to go. Keep talking!"; b.hidden = false; }
   else b.hidden = true;
-  const ok = me.value.trim().length > 1 && wins.length > 0;
+  const ok = me.value.trim().length > 1 && full;
   document.getElementById("save").disabled = !ok;
-  document.getElementById("note").textContent = ok ? "Saves a picture of your card on your phone." : "Write your name and complete one line to save your card.";
+  document.getElementById("note").textContent = ok ? "Saves a picture of your card on your phone." : "Write your name and fill all nine squares to save your card.";
 }
 
 function wrap(ctx, text, maxW, maxLines) {
@@ -153,7 +153,7 @@ async function draw() {
     const x = gx + (i % 3) * (cw + gap), y = gy + Math.floor(i / 3) * (ch + gap);
     rr(ctx, x, y, cw, ch, 22);
     ctx.fillStyle = filled[i] ? "#173324" : (i === 4 ? "#3a2a14" : "#1d2027"); ctx.fill();
-    ctx.lineWidth = winSet.has(i) ? 6 : 2; ctx.strokeStyle = winSet.has(i) ? "#ff9a1f" : "#333845"; ctx.stroke();
+    ctx.lineWidth = i === 4 ? 6 : 2; ctx.strokeStyle = i === 4 ? "#ff9a1f" : "#333845"; ctx.stroke();
     ctx.fillStyle = filled[i] ? "#7fd9a3" : "#a3a8b5"; ctx.font = `600 26px ${B}`;
     wrap(ctx, PROMPTS[i], cw - 40, 3).forEach((l, k) => ctx.fillText(l, x + 20, y + 46 + k * 33));
     if (names[i]) {
@@ -163,14 +163,14 @@ async function draw() {
     }
   }
   // stamp
-  const label = full ? "FULL CARD" : "BINGO";
+  const label = "BINGO";
   ctx.save(); ctx.translate(W - 250, 150); ctx.rotate(-0.18);
-  ctx.font = `700 ${full ? 56 : 72}px ${D}`; const tw = ctx.measureText(label).width;
+  ctx.font = `700 72px ${D}`; const tw = ctx.measureText(label).width;
   rr(ctx, -tw / 2 - 26, -62, tw + 52, 96, 14); ctx.lineWidth = 7; ctx.strokeStyle = "#ff9a1f"; ctx.stroke();
   ctx.fillStyle = "#ff9a1f"; ctx.textAlign = "center"; ctx.fillText(label, 0, 10); ctx.restore();
   const now = new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
   ctx.fillStyle = "#a3a8b5"; ctx.font = `500 28px ${B}`; ctx.textAlign = "left";
-  ctx.fillText(`${wins.length} line${wins.length === 1 ? "" : "s"} · saved at ${now}`, 70, H - 60);
+  ctx.fillText(`9 people · completed at ${now}`, 70, H - 60);
   ctx.textAlign = "right"; ctx.fillText("Corina Ghiațău & Radu Voinescu", W - 70, H - 60); ctx.textAlign = "left";
   return new Promise(res => cv.toBlob(res, "image/png"));
 }
