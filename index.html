@@ -59,12 +59,11 @@ input:focus-visible, textarea:focus-visible, button:focus-visible { outline: 2px
     <h1>AI People Bingo</h1>
   </header>
   <p class="rules">Find a different person for each square. Ask them, talk for a minute, then write their <b>first and last name</b>. Bingo means <b>all nine squares</b>: nine people, nine conversations. Then tap <b>Save my card</b> and keep it on your phone: you may be asked to show it during the talk.</p>
-  <label class="me">Your name <input id="me" type="text" maxlength="40" autocomplete="name" placeholder="First and last name"></label>
   <div class="status"><span class="count" id="count">0 / 9</span><div class="bar" aria-hidden="true"><span id="bar"></span></div></div>
   <div class="banner" id="banner" hidden></div>
   <section class="grid" id="grid" aria-label="Bingo card"></section>
   <button type="button" id="save" class="save" disabled>Save my card</button>
-  <p class="note" id="note">Write your name and fill all nine squares to save your card.</p>
+  <p class="note" id="note">Fill all 9 squares to unlock this button.</p>
   <div class="preview" id="preview" hidden></div>
   <div class="foot">
     <span>Everything stays on your phone.</span>
@@ -90,9 +89,6 @@ const get = k => { try { return localStorage.getItem(k); } catch (e) { return nu
 const set = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
 let names = Array(9).fill("");
 try { const s = JSON.parse(get(KEY) || "null"); if (Array.isArray(s) && s.length === 9) names = s.map(v => String(v || "")); } catch (e) {}
-const me = document.getElementById("me");
-me.value = get(KEY + "-me") || "";
-me.addEventListener("input", () => { set(KEY + "-me", me.value.trim()); render(); });
 
 const grid = document.getElementById("grid");
 PROMPTS.forEach((text, i) => {
@@ -121,9 +117,9 @@ function render() {
   if (full) { b.textContent = "BINGO! Save your card. You may be asked to show it during the talk."; b.hidden = false; }
   else if (n >= 6) { b.textContent = (9 - n) + " to go. Keep talking!"; b.hidden = false; }
   else b.hidden = true;
-  const ok = me.value.trim().length > 1 && full;
+  const ok = full;
   document.getElementById("save").disabled = !ok;
-  document.getElementById("note").textContent = ok ? "Saves a picture of your card on your phone." : "Write your name and fill all nine squares to save your card.";
+  document.getElementById("note").textContent = ok ? "Saves a picture of your card to your phone." : "Fill all 9 squares to unlock this button.";
 }
 
 function wrap(ctx, text, maxW, maxLines) {
@@ -146,8 +142,6 @@ async function draw() {
   ctx.fillStyle = "#14161b"; ctx.fillRect(0, 0, W, H);
   ctx.fillStyle = "#ff9a1f"; ctx.font = `600 28px ${B}`; ctx.fillText("RO AI MEETUP · BUCHAREST · 12.11.2026", 70, 100);
   ctx.fillStyle = "#f1f2f5"; ctx.font = `700 76px ${D}`; ctx.fillText("AI People Bingo", 70, 185);
-  ctx.fillStyle = "#a3a8b5"; ctx.font = `500 34px ${B}`; ctx.fillText("Card of", 70, 245);
-  ctx.fillStyle = "#f1f2f5"; ctx.font = `700 40px ${B}`; ctx.fillText(wrap(ctx, me.value.trim(), 800, 1)[0], 200, 245);
   const winSet = new Set(wins.flat()), gx = 70, gy = 290, gap = 16, cw = (W - 2 * gx - 2 * gap) / 3, ch = 290;
   for (let i = 0; i < 9; i++) {
     const x = gx + (i % 3) * (cw + gap), y = gy + Math.floor(i / 3) * (ch + gap);
@@ -177,7 +171,7 @@ async function draw() {
 
 document.getElementById("save").onclick = async () => {
   const blob = await draw();
-  const fname = "ai-people-bingo-" + (me.value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-") || "card") + ".png";
+  const fname = "ai-people-bingo-" + "card" + ".png";
   const file = new File([blob], fname, { type: "image/png" });
   const url = URL.createObjectURL(blob);
   const pv = document.getElementById("preview");
