@@ -22,8 +22,6 @@ main { max-width: 560px; margin: 0 auto; display: grid; gap: 16px; }
 .eyebrow { font: 600 12px/1 var(--body); letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
 h1 { font: 700 30px/1.1 var(--display); margin: 6px 0 0; }
 .rules { color: var(--muted); margin: 0; }
-.me { display: grid; gap: 6px; font-weight: 600; }
-.me input { font: 500 16px var(--body); color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
 .status { display: flex; align-items: center; gap: 12px; font-variant-numeric: tabular-nums; }
 .count { font-weight: 600; }
 .bar { flex: 1; height: 8px; background: var(--line); border-radius: 99px; overflow: hidden; }
@@ -58,15 +56,15 @@ input:focus-visible, textarea:focus-visible, button:focus-visible { outline: 2px
     <div class="eyebrow">RO AI meetup · Bucharest · 12.11.2026</div>
     <h1>AI People Bingo</h1>
   </header>
-  <p class="rules">Find a different person for each square. Ask them, talk for a minute, then write their <b>first and last name</b>. Bingo means <b>all nine squares</b>: nine people, nine conversations. Then tap <b>Save my card</b> and keep it on your phone: you may be asked to show it during the talk.</p>
+  <p class="rules">Find a different person for each square. Ask them, talk for a minute, then write their <b>first and last name</b>. A full row, column or diagonal is a <b>BINGO</b>. All nine squares is a <b>SUPER BINGO</b>: nine people, nine conversations. Then tap <b>Save my card</b> and keep it on your phone: you may be asked to show it during the talk.</p>
   <div class="status"><span class="count" id="count">0 / 9</span><div class="bar" aria-hidden="true"><span id="bar"></span></div></div>
   <div class="banner" id="banner" hidden></div>
   <section class="grid" id="grid" aria-label="Bingo card"></section>
   <button type="button" id="save" class="save" disabled>Save my card</button>
-  <p class="note" id="note">Fill all 9 squares to unlock this button.</p>
+  <p class="note" id="note">Complete a row, column or diagonal to unlock this button.</p>
   <div class="preview" id="preview" hidden></div>
   <div class="foot">
-    <span>Everything stays on your phone.</span>
+    <span>Names stay on your phone. We only count, anonymously, which squares are filled.</span>
     <div class="confirm" id="clearBox"></div>
   </div>
 </main>
@@ -114,13 +112,48 @@ function render() {
   const winSet = new Set(wins.flat());
   [...grid.children].forEach((c, i) => { c.classList.toggle("filled", filled[i]); c.classList.toggle("win", winSet.has(i)); });
   const b = document.getElementById("banner");
-  if (full) { b.textContent = "BINGO! Save your card. You may be asked to show it during the talk."; b.hidden = false; }
-  else if (n >= 6) { b.textContent = (9 - n) + " to go. Keep talking!"; b.hidden = false; }
+  if (full) { b.textContent = "SUPER BINGO! All nine squares. Save your card: you may be asked to show it during the talk."; b.hidden = false; }
+  else if (wins.length) { b.textContent = "BINGO! You have " + (wins.length === 1 ? "a line" : wins.length + " lines") + ". Save your card, or keep going for SUPER BINGO (all nine)."; b.hidden = false; }
   else b.hidden = true;
-  const ok = full;
+  const ok = wins.length > 0;
   document.getElementById("save").disabled = !ok;
-  document.getElementById("note").textContent = ok ? "Saves a picture of your card to your phone." : "Fill all 9 squares to unlock this button.";
+  document.getElementById("note").textContent = ok ? "Saves a picture of your card to your phone." : "Complete a row, column or diagonal to unlock this button.";
+  report();
 }
+
+// Anonymous live count: only which squares are filled, never the names.
+const TOPIC = "roai-bingo-r3kik1uhfh";
+let pid = get(KEY + "-id");
+if (!pid) { pid = Math.random().toString(36).slice(2, 10); set(KEY + "-id", pid); }
+let lastSent = null, timer = null, mq = null;
+function payload() {
+  const { filled, n, wins } = state();
+  return JSON.stringify({ id: pid, f: filled.map(x => x ? 1 : 0).join(""), n, l: wins.length, t: Date.now() });
+}
+function report() {
+  const { filled } = state(), sig = filled.map(x => x ? 1 : 0).join("");
+  if (sig === lastSent) return;
+  clearTimeout(timer);
+  timer = setTimeout(() => send(sig), 3000);
+}
+function send(sig) {
+  const body = payload();
+  lastSent = sig;
+  try { fetch("https://ntfy.sh/" + TOPIC, { method: "POST", body, keepalive: true }).catch(() => {}); } catch (e) {}
+  try { if (mq && mq.connected) mq.publish(TOPIC + "/p/" + pid, body, { qos: 1, retain: true }); else pendingMq = body; } catch (e) {}
+}
+let pendingMq = null;
+(function loadMqtt() {
+  const sc = document.createElement("script");
+  sc.src = "https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js";
+  sc.onload = () => {
+    try {
+      mq = mqtt.connect("wss://broker.hivemq.com:8884/mqtt", { clientId: "bingo-" + pid + "-" + Math.random().toString(36).slice(2, 6), reconnectPeriod: 5000, connectTimeout: 8000 });
+      mq.on("connect", () => { const b = pendingMq || payload(); pendingMq = null; mq.publish(TOPIC + "/p/" + pid, b, { qos: 1, retain: true }); });
+    } catch (e) {}
+  };
+  document.head.append(sc);
+})();
 
 function wrap(ctx, text, maxW, maxLines) {
   const words = text.split(" "), lines = []; let line = "";
@@ -147,7 +180,7 @@ async function draw() {
     const x = gx + (i % 3) * (cw + gap), y = gy + Math.floor(i / 3) * (ch + gap);
     rr(ctx, x, y, cw, ch, 22);
     ctx.fillStyle = filled[i] ? "#173324" : (i === 4 ? "#3a2a14" : "#1d2027"); ctx.fill();
-    ctx.lineWidth = i === 4 ? 6 : 2; ctx.strokeStyle = i === 4 ? "#ff9a1f" : "#333845"; ctx.stroke();
+    ctx.lineWidth = winSet.has(i) ? 6 : 2; ctx.strokeStyle = winSet.has(i) ? "#ff9a1f" : "#333845"; ctx.stroke();
     ctx.fillStyle = filled[i] ? "#7fd9a3" : "#a3a8b5"; ctx.font = `600 26px ${B}`;
     wrap(ctx, PROMPTS[i], cw - 40, 3).forEach((l, k) => ctx.fillText(l, x + 20, y + 46 + k * 33));
     if (names[i]) {
@@ -157,14 +190,18 @@ async function draw() {
     }
   }
   // stamp
-  const label = "BINGO";
   ctx.save(); ctx.translate(W - 250, 150); ctx.rotate(-0.18);
-  ctx.font = `700 72px ${D}`; const tw = ctx.measureText(label).width;
-  rr(ctx, -tw / 2 - 26, -62, tw + 52, 96, 14); ctx.lineWidth = 7; ctx.strokeStyle = "#ff9a1f"; ctx.stroke();
-  ctx.fillStyle = "#ff9a1f"; ctx.textAlign = "center"; ctx.fillText(label, 0, 10); ctx.restore();
-  const now = new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
-  ctx.fillStyle = "#a3a8b5"; ctx.font = `500 28px ${B}`; ctx.textAlign = "left";
-  ctx.fillText(`9 people · completed at ${now}`, 70, H - 60);
+  ctx.font = `700 72px ${D}`; const tw = ctx.measureText("BINGO").width;
+  ctx.strokeStyle = "#ff9a1f"; ctx.fillStyle = "#ff9a1f"; ctx.lineWidth = 7; ctx.textAlign = "center";
+  if (full) {
+    rr(ctx, -tw / 2 - 26, -104, tw + 52, 138, 14); ctx.stroke();
+    ctx.font = `700 34px ${D}`; ctx.fillText("SUPER", 0, -58);
+    ctx.font = `700 72px ${D}`; ctx.fillText("BINGO", 0, 10);
+  } else {
+    rr(ctx, -tw / 2 - 26, -62, tw + 52, 96, 14); ctx.stroke(); ctx.fillText("BINGO", 0, 10);
+  }
+  ctx.restore();
+  ctx.fillStyle = "#a3a8b5"; ctx.font = `500 28px ${B}`;
   ctx.textAlign = "right"; ctx.fillText("Corina Ghiațău & Radu Voinescu", W - 70, H - 60); ctx.textAlign = "left";
   return new Promise(res => cv.toBlob(res, "image/png"));
 }

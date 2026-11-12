@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Bingo Live</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600;700&display=swap">
+<style>
+:root { --bg:#14161b; --surface:#1d2027; --ink:#f1f2f5; --muted:#a3a8b5; --line:#333845; --accent:#ff9a1f; --done:#7fd9a3;
+  --display:"Space Grotesk","Segoe UI",sans-serif; --body:Inter,"Segoe UI",sans-serif; color-scheme: dark; }
+* { box-sizing: border-box; }
+body { margin:0; background:var(--bg); color:var(--ink); font-family:var(--body); padding:20px 16px 40px; }
+main { max-width: 900px; margin: 0 auto; display: grid; gap: 20px; }
+.eyebrow { font:600 12px/1 var(--body); letter-spacing:.08em; text-transform:uppercase; color:var(--accent); }
+h1 { font:700 30px/1.1 var(--display); margin:6px 0 0; }
+.kpis { display:grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap:10px; }
+.kpi { background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:14px; }
+.kpi b { display:block; font:700 44px/1 var(--display); font-variant-numeric: tabular-nums; }
+.kpi span { color:var(--muted); font-size:13px; }
+.kpi.hot b { color:var(--accent); }
+h2 { font:700 18px var(--display); margin:0 0 10px; }
+.heat { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; }
+.sq { border-radius:12px; padding:12px; min-height:110px; border:1px solid var(--line); display:grid; align-content:space-between; gap:8px; }
+.sq p { margin:0; font-size:13px; line-height:1.3; }
+.sq b { font:700 30px var(--display); font-variant-numeric: tabular-nums; }
+.players { display:grid; grid-template-columns:repeat(auto-fill,minmax(64px,1fr)); gap:8px; }
+.mini { display:grid; grid-template-columns:repeat(3,1fr); gap:2px; padding:5px; border-radius:8px; background:var(--surface); border:1px solid var(--line); }
+.mini i { aspect-ratio:1; border-radius:2px; background:var(--line); }
+.mini i.on { background:var(--done); }
+.mini.bingo { border-color:var(--accent); }
+.mini.super { border-color:var(--accent); background:#3a2a14; }
+.foot { display:flex; gap:10px; flex-wrap:wrap; align-items:center; color:var(--muted); font-size:13px; }
+button { font:600 13px var(--body); color:var(--ink); background:var(--surface); border:1px solid var(--line); border-radius:8px; padding:8px 12px; cursor:pointer; }
+.dot { display:inline-block; width:9px; height:9px; border-radius:50%; background:var(--line); margin-right:4px; }
+.dot.ok { background:var(--done); }
+@media (max-width:600px) { .kpis { grid-template-columns:repeat(2,minmax(0,1fr)); } .kpi b { font-size:36px; } }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="eyebrow">RO AI meetup · live, anonymous</div>
+    <h1>AI People Bingo: live</h1>
+  </header>
+  <section class="kpis">
+    <div class="kpi"><b id="kOpen">0</b><span>opened the card</span></div>
+    <div class="kpi"><b id="kPlay">0</b><span>filled at least one square</span></div>
+    <div class="kpi hot"><b id="kBingo">0</b><span>BINGO (a full line)</span></div>
+    <div class="kpi hot"><b id="kSuper">0</b><span>SUPER BINGO (all 9)</span></div>
+  </section>
+  <section>
+    <h2>How many people filled each square</h2>
+    <div class="heat" id="heat"></div>
+  </section>
+  <section>
+    <h2>Every card, anonymous</h2>
+    <div class="players" id="players"></div>
+  </section>
+  <div class="foot">
+    <span><span class="dot" id="d1"></span>ntfy</span>
+    <span><span class="dot" id="d2"></span>mqtt</span>
+    <span id="upd">waiting for data</span>
+    <button type="button" id="from">Count from now</button>
+    <button type="button" id="all">Show everything</button>
+  </div>
+</main>
+<script src="https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js"></script>
+<script>
+const PROMPTS = ["Has built their own agentic system","Works in a company where AI is still banned","Has made two AI models debate each other","Is not a developer, but builds with AI","Told me a good joke about AI","Has an AI agent that works for them while they sleep","Is at a RO AI meetup for the first time","Has given their AI agent a name","Was surprised by an AI this week"];
+const TOPIC = "roai-bingo-r3kik1uhfh";
+const players = new Map();
+let since = 0; try { since = Number(localStorage.getItem("bingo-live-since") || 0); } catch (e) {}
+function take(raw) {
+  try {
+    const m = typeof raw === "string" ? JSON.parse(raw) : raw;
+    if (!m || !m.id || typeof m.f !== "string" || m.f.length !== 9) return;
+    const old = players.get(m.id);
+    if (!old || m.t >= old.t) players.set(m.id, m);
+  } catch (e) {}
+}
+function render() {
+  const list = [...players.values()].filter(p => p.t >= since).sort((a, b) => b.n - a.n || a.t - b.t);
+  const counts = Array(9).fill(0);
+  list.forEach(p => [...p.f].forEach((c, i) => { if (c === "1") counts[i]++; }));
+  document.getElementById("kOpen").textContent = list.length;
+  document.getElementById("kPlay").textContent = list.filter(p => p.n > 0).length;
+  document.getElementById("kBingo").textContent = list.filter(p => p.l > 0).length;
+  document.getElementById("kSuper").textContent = list.filter(p => p.n === 9).length;
+  const max = Math.max(1, ...counts), heat = document.getElementById("heat");
+  heat.innerHTML = "";
+  counts.forEach((c, i) => {
+    const d = document.createElement("div"); d.className = "sq";
+    d.style.background = `rgba(127,217,163,${0.06 + 0.5 * c / max})`;
+    const p = document.createElement("p"); p.textContent = PROMPTS[i];
+    const b = document.createElement("b"); b.textContent = c;
+    d.append(p, b); heat.append(d);
+  });
+  const pl = document.getElementById("players"); pl.innerHTML = "";
+  list.forEach(p => {
+    const m = document.createElement("div"); m.className = "mini" + (p.n === 9 ? " super" : p.l > 0 ? " bingo" : "");
+    m.title = p.n + " / 9";
+    [...p.f].forEach(c => { const i = document.createElement("i"); if (c === "1") i.className = "on"; m.append(i); });
+    pl.append(m);
+  });
+  document.getElementById("upd").textContent = "updated " + new Date().toLocaleTimeString("en-GB");
+}
+async function poll() {
+  try {
+    const r = await fetch(`https://ntfy.sh/${TOPIC}/json?poll=1&since=all`, { cache: "no-store" });
+    const txt = await r.text();
+    txt.split("\n").forEach(line => { if (!line.trim()) return; try { const e = JSON.parse(line); if (e.event === "message") take(e.message); } catch (x) {} });
+    document.getElementById("d1").className = "dot ok";
+  } catch (e) { document.getElementById("d1").className = "dot"; }
+  render();
+}
+try {
+  const mq = mqtt.connect("wss://broker.hivemq.com:8884/mqtt", { clientId: "bingo-live-" + Math.random().toString(36).slice(2, 8), reconnectPeriod: 5000 });
+  mq.on("connect", () => { document.getElementById("d2").className = "dot ok"; mq.subscribe(TOPIC + "/p/+", { qos: 1 }); });
+  mq.on("close", () => { document.getElementById("d2").className = "dot"; });
+  mq.on("message", (t, buf) => { take(buf.toString()); render(); });
+} catch (e) {}
+document.getElementById("from").onclick = () => { since = Date.now(); try { localStorage.setItem("bingo-live-since", since); } catch (e) {} render(); };
+document.getElementById("all").onclick = () => { since = 0; try { localStorage.removeItem("bingo-live-since"); } catch (e) {} render(); };
+poll(); setInterval(poll, 10000);
+</script>
+</body>
+</html>
