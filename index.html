@@ -43,6 +43,11 @@ h1 { font: 700 30px/1.1 var(--display); margin: 6px 0 0; text-wrap: balance; }
 button { font: 600 13px var(--body); color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; cursor: pointer; }
 button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .confirm { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.me { display: grid; gap: 6px; font-weight: 600; }
+.me input { font: 500 16px var(--body); color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+.send { font: 700 17px var(--body); background: var(--accent); color: #fff; border: 0; border-radius: 12px; padding: 14px; }
+.send:disabled { background: var(--line); color: var(--muted); cursor: default; }
+.note { margin: -8px 0 0; color: var(--muted); font-size: 13px; text-align: center; }
 @media (max-width: 380px) { .cell { min-height: 140px; } .cell p { font-size: 12px; } }
 @media (prefers-reduced-motion: reduce) { .bar span { transition: none; } }
 </style>
@@ -53,12 +58,15 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
     <div class="eyebrow">RO AI meetup · Bucharest</div>
     <h1>AI People Bingo</h1>
   </header>
-  <p class="rules">Find a different person for each square. Ask them, talk for a minute, then write their first name. A full row, column or diagonal is a bingo. Fill all nine and show your card to Corina or Radu at the end.</p>
+  <p class="rules">Find a different person for each square. Ask them, talk for a minute, then write their first name. A full row, column or diagonal is a bingo. When you have a line, tap <b>Send my card</b>. Send again when you fill more.</p>
+  <label class="me">Your name <input id="me" type="text" maxlength="40" autocomplete="name" placeholder="First and last name"></label>
   <div class="status"><span class="count" id="count">0 / 9</span><div class="bar" aria-hidden="true"><span id="bar"></span></div></div>
   <div class="banner" id="banner" hidden></div>
   <section class="grid" id="grid" aria-label="Bingo card"></section>
+  <button type="button" id="send" class="send" disabled>Send my card</button>
+  <p class="note" id="sendNote">Fill your name and one full line to send.</p>
   <div class="foot">
-    <span>Names stay on your phone only.</span>
+    <span>Sending shares your card with the organisers for tonight's game only. It is deleted within 12 hours.</span>
     <div class="confirm" id="clearBox">
       <button type="button" id="clear">Start over</button>
     </div>
@@ -79,6 +87,11 @@ const PROMPTS = [
 ];
 const LINES = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
 const KEY = "roai-bingo-2026";
+const TOPIC = "https://ntfy.sh/" + (new URLSearchParams(location.search).get("t") || "roai-bingo-fcb3c2a7a32e6d39");
+let dev; try { dev = localStorage.getItem(KEY+"-id"); if (!dev) { dev = Math.random().toString(36).slice(2,10); localStorage.setItem(KEY+"-id", dev); } } catch (e) { dev = Math.random().toString(36).slice(2,10); }
+const meInput = document.getElementById("me");
+try { meInput.value = localStorage.getItem(KEY+"-me") || ""; } catch (e) {}
+meInput.addEventListener("input", () => { try { localStorage.setItem(KEY+"-me", meInput.value.trim()); } catch (e) {} render(); });
 let names = Array(9).fill("");
 try { const s = JSON.parse(localStorage.getItem(KEY) || "null"); if (Array.isArray(s) && s.length === 9) names = s.map(v => String(v || "")); } catch (e) {}
 
@@ -109,7 +122,27 @@ function render() {
   if (n === 9) { b.textContent = "Full card. Show it to Corina or Radu at the end."; b.hidden = false; }
   else if (wins.length) { b.textContent = "Bingo! You have a line. Keep going for the full card."; b.hidden = false; }
   else { b.hidden = true; }
+  const send = document.getElementById("send");
+  const ok = meInput.value.trim().length > 1 && wins.length > 0;
+  send.disabled = !ok || sending;
+  if (!sending) document.getElementById("sendNote").textContent = ok ? (sentOnce ? "Sent. Tap again to update your card." : "Ready to send.") : "Fill your name and one full line to send.";
 }
+let sending = false, sentOnce = false;
+document.getElementById("send").onclick = async () => {
+  const filled = names.map(n => n.length > 0);
+  const lines = LINES.filter(l => l.every(i => filled[i])).length;
+  const body = JSON.stringify({ d: dev, p: meInput.value.trim(), n: names, l: lines, f: filled.every(Boolean) });
+  sending = true; render(); document.getElementById("sendNote").textContent = "Sending...";
+  try {
+    const r = await fetch(TOPIC, { method: "POST", body });
+    if (!r.ok) throw new Error(r.status);
+    sentOnce = true; sending = false; render();
+    document.getElementById("sendNote").textContent = "Sent! Corina can see your card. Tap again to update it.";
+  } catch (e) {
+    sending = false; render();
+    document.getElementById("sendNote").textContent = "Could not send. Try again in a few seconds, or show your phone to Corina.";
+  }
+};
 
 const box = document.getElementById("clearBox");
 function askClear() {

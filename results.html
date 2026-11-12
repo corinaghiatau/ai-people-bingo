@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Bingo results</title>
+<style>
+:root { --bg:#111318; --card:#1c1f27; --ink:#f2f3f6; --muted:#9aa0ad; --line:#323744; --accent:#ff9a1f; --ok:#7fd9a3; --okbg:#173324; }
+* { box-sizing: border-box; }
+body { margin:0; background:var(--bg); color:var(--ink); font-family:"Segoe UI",system-ui,sans-serif; padding:20px 16px 40px; }
+header { display:flex; justify-content:space-between; align-items:flex-end; gap:16px; flex-wrap:wrap; max-width:1400px; margin:0 auto 18px; }
+h1 { margin:0; font-size:34px; }
+.stats { display:flex; gap:22px; font-size:18px; color:var(--muted); }
+.stats b { color:var(--ink); font-size:28px; display:block; }
+#live { font-size:13px; color:var(--muted); }
+#live.on::before { content:"● "; color:var(--ok); }
+#live.off::before { content:"● "; color:#e5484d; }
+.wall { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:14px; max-width:1400px; margin:0 auto; }
+.p { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:12px; }
+.p.full { border-color:var(--accent); box-shadow:0 0 0 2px var(--accent) inset; }
+.top { display:flex; justify-content:space-between; align-items:baseline; gap:8px; margin-bottom:8px; }
+.name { font-weight:700; font-size:19px; }
+.rank { color:var(--accent); font-weight:700; margin-right:6px; }
+.tag { font-size:12px; font-weight:700; padding:3px 8px; border-radius:99px; background:var(--okbg); color:var(--ok); white-space:nowrap; }
+.p.full .tag { background:var(--accent); color:#111; }
+.g { display:grid; grid-template-columns:repeat(3,1fr); gap:4px; }
+.c { background:#151820; border-radius:6px; padding:5px; min-height:52px; font-size:11px; color:var(--muted); line-height:1.2; }
+.c b { display:block; color:var(--ink); font-size:14px; margin-top:3px; overflow-wrap:anywhere; }
+.c.f { background:var(--okbg); }
+.time { font-size:12px; color:var(--muted); margin-top:6px; }
+.empty { color:var(--muted); font-size:20px; text-align:center; padding:60px 0; grid-column:1/-1; }
+</style>
+</head>
+<body>
+<header>
+  <div><h1>AI People Bingo · live</h1><div id="live" class="off">connecting</div></div>
+  <div class="stats"><div><b id="nP">0</b>cards sent</div><div><b id="nB">0</b>with bingo</div><div><b id="nF">0</b>full cards</div></div>
+</header>
+<section class="wall" id="wall"><div class="empty">Waiting for the first card...</div></section>
+<script>
+const TOPIC = new URLSearchParams(location.search).get("t") || "roai-bingo-fcb3c2a7a32e6d39";
+const SHORT = ["Built an agentic system","AI still banned at work","Made two AIs debate","Not a developer","Good joke about AI","Agent works while they sleep","First RO AI meetup","Rule AI never does","Changed how they lead"];
+const players = new Map(); // device -> {p,n,l,f,first,last,firstFull}
+function esc(s){ return String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+function hhmm(t){ return new Date(t*1000).toLocaleTimeString("ro-RO",{hour:"2-digit",minute:"2-digit",second:"2-digit"}); }
+function add(m){
+  let d; try { d = JSON.parse(m.message); } catch(e){ return; }
+  if (!d || !d.d || !Array.isArray(d.n)) return;
+  const prev = players.get(d.d) || { first:m.time };
+  players.set(d.d, { ...d, first:prev.first, last:m.time, firstFull: prev.firstFull || (d.f ? m.time : null) });
+  draw();
+}
+function draw(){
+  const list = [...players.values()].sort((a,b) =>
+    (b.f - a.f) || (a.f && b.f ? a.firstFull - b.firstFull : 0) || (a.first - b.first));
+  document.getElementById("nP").textContent = list.length;
+  document.getElementById("nB").textContent = list.filter(x => x.l > 0).length;
+  document.getElementById("nF").textContent = list.filter(x => x.f).length;
+  if (!list.length) return;
+  document.getElementById("wall").innerHTML = list.map((x,i) => `
+    <div class="p ${x.f ? "full" : ""}">
+      <div class="top"><div class="name"><span class="rank">${i+1}.</span>${esc(x.p || "?")}</div>
+      <span class="tag">${x.f ? "FULL CARD" : "BINGO × " + x.l}</span></div>
+      <div class="g">${x.n.slice(0,9).map((v,j) => `<div class="c ${v ? "f" : ""}">${SHORT[j]}${v ? `<b>${esc(v)}</b>` : ""}</div>`).join("")}</div>
+      <div class="time">first sent ${hhmm(x.first)}${x.firstFull ? " · full at " + hhmm(x.firstFull) : ""}${x.last !== x.first ? " · updated " + hhmm(x.last) : ""}</div>
+    </div>`).join("");
+}
+function connect(){
+  const es = new EventSource(`https://ntfy.sh/${TOPIC}/sse?since=all`);
+  const live = document.getElementById("live");
+  es.onopen = () => { live.className = "on"; live.textContent = "live"; };
+  es.onmessage = e => { try { const m = JSON.parse(e.data); if (m.event === "message") add(m); } catch(err){} };
+  es.onerror = () => { live.className = "off"; live.textContent = "reconnecting"; };
+}
+connect();
+</script>
+</body>
+</html>
